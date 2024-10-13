@@ -1,6 +1,6 @@
 {
   "name": "koishi-plugin-w-openrouter",
-  "description": "WillBot: Openrouter.ai functions",
+  "description": "WillBot: OpenRouter.ai functions",
   "version": "0.0.1",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
@@ -9,14 +9,20 @@
     "dist"
   ],
   "license": "MIT",
-  "scripts": {},
   "keywords": [
     "chatbot",
     "koishi",
     "plugin"
   ],
-  "devDependencies": {},
   "peerDependencies": {
     "koishi": "^4.18.0"
+  },
+  "dependencies": {
+    "openai": "^4.67.3"
+  },
+  "scripts": {
+    "build": "yarn workspace willbot build w-openrouter",
+    "bump": "yarn workspace willbot bump w-openrouter",
+    "pub": "yarn workspace willbot pub w-openrouter"
   }
 }

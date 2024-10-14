@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-w-openrouter",
   "description": "WillBot: OpenRouter.ai functions",
-  "version": "0.0.1",
+  "version": "0.1.1",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -18,6 +18,8 @@
     "koishi": "^4.18.0"
   },
   "dependencies": {
+    "@satorijs/element": "^3.1.7",
+    "koishi-plugin-w-as-forward": "workspace:^",
     "openai": "^4.67.3"
   },
   "scripts": {

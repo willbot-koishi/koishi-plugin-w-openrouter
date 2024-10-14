@@ -1,11 +1,12 @@
-import { capitalize, Context, omit, z } from 'koishi'
-import {} from 'koishi-plugin-w-as-forward'
+import { capitalize, Context, omit, SessionError, z } from 'koishi'
+import type {} from 'koishi-plugin-w-as-forward'
+import type { ReactiveHandler } from 'koishi-plugin-w-reactive'
 
 import OpenAI from 'openai'
 
 export const name = 'w-openrouter'
 
-export const inject = [ 'database' ]
+export const inject = [ 'database', 'reactive' ]
 
 export const API_URL = 'https://openrouter.ai/api/v1'
 
@@ -216,7 +217,7 @@ export const Config: z<Config> = z.object({
     apiKey: z.string().required().description('OpenRouter API key.'),
     rankUrl: z.string().description('An optional URL, for including your koishi on openrouter.ai rankings.'),
     rankName: z.string().description('Shows in rankings on openrouter.ai.'),
-    model: z.union(MODELS)
+    model: z.union(MODELS).description('The default model to use.')
 })
 
 export type OpenRouterContextMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam
@@ -225,6 +226,10 @@ export interface OpenRouterContext {
     id: string
     owner: string
     messages: OpenRouterContextMessage[]
+}
+
+export interface OpenRouterUser {
+    defaultContext: string | null
 }
 
 declare module 'koishi' {
@@ -242,6 +247,12 @@ export function apply(ctx: Context, config: Config) {
             'X-Title': config.rankName
         }
     })
+
+    const users: Record<string, ReactiveHandler<OpenRouterUser>> = {}
+    const getUser = async (uid: string) => users[uid]
+        ??= await ctx.reactive.create<OpenRouterUser>('openrouter-user', uid, {
+            defaultContext: null
+        })
 
     type GetContextOptions = {
         owner?: string
@@ -287,6 +298,13 @@ export function apply(ctx: Context, config: Config) {
         return { status: 'ok', context }
     }
 
+    const tryToGetContext = async (id: string, uid: string) => {
+        const contextResult = await getContext(id, { owner: uid, whenNotFound: 'fail' })
+        if (contextResult.status === 'err')
+            throw new SessionError('error', [ `Failed to get context: ${contextResult.reason}` ])
+        return contextResult.context
+    }
+
     type RenderContextOptions = {
         contextId?: string
         showHistory?: boolean
@@ -312,6 +330,10 @@ export function apply(ctx: Context, config: Config) {
         }
     }, { primary: 'id' })
 
+    ctx.i18n.define('en-US', {
+        error: '[Error] {0}'
+    })
+
     ctx.command('openrouter <message:text>', 'Chat with OpenRouter.')
         .alias('or')
         .option('context', '-c <id:string> use persistent context (auto create)')
@@ -329,6 +351,9 @@ export function apply(ctx: Context, config: Config) {
             inputText
         ) => {
             if (! MODELS.includes(model as any)) return `[Error] Unknown model '${model}'.`
+
+            const { reactive: userR } = await getUser(uid)
+            contextId ||= userR.defaultContext
 
             const contextResult = await getContext(contextId, { owner: uid, whenNotFound: 'pass' })
             if (contextResult.status === 'err') return `[Error] Failed to get context: ${contextResult.reason}.`
@@ -370,54 +395,57 @@ export function apply(ctx: Context, config: Config) {
     ctx.command('openrouter.context', 'Manage OpenRouter contexts.')
 
     ctx.command('openrouter.context.create <id:string>', 'Create a context.')
-        .action(async ({ session }, id) => {
+        .action(async ({ session: { uid } }, id) => {
             const contextResult = await getContext(id)
             if (contextResult.status === 'ok') return `[Error] Context id '${id}' has been used.`
 
             const context: OpenRouterContext = {
                 id,
-                owner: session.uid,
+                owner: uid,
                 messages: []
             }
-
-            context.messages[0].role
-
             await ctx.database.create('w-openrouter-context', context)
+
+            const { reactive: userR } = await getUser(uid)
+            userR.defaultContext ??= id
+
             return `[OK] Created context '${id}'.`
         })
 
     ctx.command('openrouter.context.show <id:string>', 'Show the detail of a context.')
-        .action(async (
-            { session: { uid } },
-            id
-        ) => {
-            const contextResult = await getContext(id, { owner: uid, whenNotFound: 'fail' })
-            if (contextResult.status === 'err') return `[Error] Failed to get context: ${contextResult.reason}`
-            
-            const { context } = contextResult
-
+        .action(async ({ session: { uid } }, id) => {
+            const context = await tryToGetContext(id, uid)
             return renderContextMessages(context.messages, { showHistory: true, contextId: id })
         })
 
-    ctx.command('openrouter.context.list', 'List your contexts.')
-        .action(async (
-            { session: { uid } }
-        ) => {
-            const contexts = await ctx.database.get('w-openrouter-context', { owner: uid })
-            return `[OK] You have ${contexts.length} contexts:\n${
-                contexts.map(context => context.id).join('\n') || 'N/A'
-            }`
+    ctx.command('openrouter.context.select <id:string>', 'Select your default context.')
+        .action(async ({ session: { uid } }, id) => {
+            await tryToGetContext(id, uid)
+            const { reactive: userR } = await getUser(uid)
+            userR.defaultContext ??= id
+
+            return `[OK] Selected context '${id}' as default.`
         })
 
     ctx.command('openrouter.context.remove <id:string>', 'Remove a context.')
-        .action(async (
-            { session: { uid } },
-            id
-        ) => {
-            const contextResult = await getContext(id, { owner: uid, whenNotFound: 'fail' })
-            if (contextResult.status === 'err') return `[Error] Failed to get context: ${contextResult.reason}`
-            
+        .action(async ({ session: { uid } }, id) => {
+            await tryToGetContext(id, uid)
+
+            const { reactive: userR } = await getUser(uid)
+            if (userR.defaultContext === id) userR.defaultContext = null
+
             await ctx.database.remove('w-openrouter-context', id)
             return `[OK] Removed context '${id}'.`
+        })
+
+    ctx.command('openrouter.context.list', 'List your contexts.')
+        .action(async ({ session: { uid } }) => {
+            const { reactive: { defaultContext } } = await getUser(uid)
+            const contexts = await ctx.database.get('w-openrouter-context', { owner: uid })
+            return `[OK] You have ${contexts.length} contexts:\n${
+                contexts
+                    .map(context => `${context.id}${defaultContext === context.id ? ' (default)' : ''}`)
+                    .join('\n') || 'N/A'
+            }`
         })
 }

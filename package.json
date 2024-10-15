@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-w-openrouter",
   "description": "WillBot: OpenRouter.ai functions",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
   "files": [
@@ -26,6 +26,14 @@
     "build": "yarn workspace willbot build w-openrouter",
     "bump": "yarn workspace willbot bump w-openrouter",
     "pub": "yarn workspace willbot pub w-openrouter"
+  },
+  "koishi": {
+    "service": {
+      "required": [
+        "database",
+        "reactive"
+      ]
+    }
   },
   "devDependencies": {
     "koishi-plugin-w-reactive": "workspace:^"

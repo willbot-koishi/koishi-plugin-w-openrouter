@@ -212,7 +212,8 @@ export function apply(ctx: Context, config: Config) {
         })
 
     ctx.command('openrouter.model', 'Manage OpenRouter models.')
-    ctx.command('openrouter.model.list')
+
+    ctx.command('openrouter.model.list', 'List models.')
         .option('filter', '-f <filter:string> filter by model name')
         .option('allowed', '-a filter models which you are allowed to use')
         .option('public', '-p filter public models')
@@ -294,7 +295,7 @@ export function apply(ctx: Context, config: Config) {
             }
             await ctx.database.create('w-openrouter-context', context)
 
-            if (doSelect) userR.defaultContext ??= id
+            if (doSelect) userR.defaultContext = id
 
             return `[OK] Created${doSelect ? ' and selected' : ''} context '${id}'.`
         })
@@ -309,7 +310,7 @@ export function apply(ctx: Context, config: Config) {
         .action(async ({ session: { uid } }, id) => {
             await tryToGetContext(id, uid)
             const { reactive: userR } = await getUser(uid)
-            userR.defaultContext ??= id
+            userR.defaultContext = id
 
             return `[OK] Selected context '${id}' as your default.`
         })

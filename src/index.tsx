@@ -1,14 +1,14 @@
 import { capitalize, Context, h, omit, SessionError, z } from 'koishi'
 import type {} from 'koishi-plugin-w-as-forward'
 import type { DatabaseReactive } from 'koishi-plugin-w-reactive'
-
+import {} from 'koishi-plugin-w-as-slices
 import OpenAI from 'openai'
 
 import { MODELS } from './models'
 
 export const name = 'w-openrouter'
 
-export const inject = [ 'database', 'reactive', 'w-as-slices' ]
+export const inject = [ 'database', 'reactive' ]
 
 export const API_URL = 'https://openrouter.ai/api/v1'
 
@@ -144,8 +144,7 @@ const renderContextMessages = (
     { showHistory = false, contextId, model }: RenderContextOptions = {}
 ) => (
     <as-forward level='always'>
-        <as-slices header={<message>[Context] { contextId || 'Temporary context' }</message>} sliceLength={config.sliceLength}>
-            <message>[Model] { model }</message>
+        <as-slices header={<><message>[Context] { contextId || 'Temporary context' }</message><message>[Model] { model }</message></>} 
             { (showHistory ? messages : messages.slice(-2))
                 .map(message => (
                     <message>

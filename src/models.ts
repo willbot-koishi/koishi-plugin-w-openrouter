@@ -1,4 +1,7 @@
 export const MODELS = [
+    'qwen/qwq-32b-preview',
+    'nvidia/llama-3.1-nemotron-70b-instruct',
+    'x-ai/grok-beta',
     'x-ai/grok-2-mini',
     'x-ai/grok-2',
     'inflection/inflection-3-productivity',

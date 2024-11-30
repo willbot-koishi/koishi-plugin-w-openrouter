@@ -1,7 +1,7 @@
 import { capitalize, Context, h, omit, SessionError, z } from 'koishi'
 import type {} from 'koishi-plugin-w-as-forward'
 import type { DatabaseReactive } from 'koishi-plugin-w-reactive'
-import {} from 'koishi-plugin-w-as-slices
+import {} from 'koishi-plugin-w-as-slices'
 import OpenAI from 'openai'
 
 import { MODELS } from './models'

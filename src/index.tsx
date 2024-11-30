@@ -8,7 +8,7 @@ import { MODELS } from './models'
 
 export const name = 'w-openrouter'
 
-export const inject = [ 'database', 'reactive' ]
+export const inject = [ 'database', 'reactive', 'w-as-slices' ] // 注入 w-as-slices 插件
 
 export const API_URL = 'https://openrouter.ai/api/v1'
 
@@ -20,6 +20,7 @@ export interface Config {
     rankName: string
     defaultModel: ModelName
     publicModels: ModelName[]
+    sliceLength: number // 新增配置项，指定分片长度
 }
 
 export const Config: z<Config> = z.object({
@@ -29,7 +30,8 @@ export const Config: z<Config> = z.object({
     defaultModel: z.union(MODELS).description('The default model to use.'),
     publicModels: z.array(z.union(MODELS))
         .default(MODELS.filter(model => model.includes('free')))
-        .description('Public models that everyone is allowed to use.')
+        .description('Public models that everyone is allowed to use.'),
+    sliceLength: z.number().default(1200).description('Length of each message slice.')
 })
 
 export type OpenRouterContextMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam
@@ -140,15 +142,16 @@ export function apply(ctx: Context, config: Config) {
     const renderContextMessages = (
         messages: OpenRouterContextMessage[],
         { showHistory = false, contextId, model }: RenderContextOptions = {}
-    ) => <as-forward level='always'>
-        <message>[Context] { contextId || 'Temporary context' }</message>
-        <message>[Model] { model }</message>
-        { (showHistory ? messages : messages.slice(- 2))
-            .map(message => <message>
-                { `[${capitalize(message.role)}] ${message.content}` }
-            </message>)
-        }
-    </as-forward>
+    ) => <as-slices header={<message>[Context] { contextId || 'Temporary context' }</message>} sliceLength={config.sliceLength}>
+        <as-forward level='always'>
+            <message>[Model] { model }</message>
+            { (showHistory ? messages : messages.slice(-2))
+                .map(message => <message>
+                    { `[${capitalize(message.role)}] ${message.content}` }
+                </message>)
+            }
+        </as-forward>
+    </as-slices>
 
     ctx.model.extend('w-openrouter-context', {
         id: 'string',
@@ -205,7 +208,7 @@ export function apply(ctx: Context, config: Config) {
             })
 
             if (context) {
-                await ctx.database.set('w-openrouter-context', contextId, omit(context, [ 'id' ]))
+                await ctx.database.set('w-openrouter-context', contextId, omit(context, ['id']))
             }
 
             return renderContextMessages(messages, { showHistory, contextId, model })

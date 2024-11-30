@@ -1,7 +1,7 @@
 import { capitalize, Context, h, omit, SessionError, z } from 'koishi'
 import type {} from 'koishi-plugin-w-as-forward'
 import type { DatabaseReactive } from 'koishi-plugin-w-reactive'
-
+import {} from 'koishi-plugin-w-as-slices'
 import OpenAI from 'openai'
 
 import { MODELS } from './models'
@@ -20,6 +20,7 @@ export interface Config {
     rankName: string
     defaultModel: ModelName
     publicModels: ModelName[]
+    sliceLength: number // slice长度(new)
 }
 
 export const Config: z<Config> = z.object({
@@ -29,7 +30,8 @@ export const Config: z<Config> = z.object({
     defaultModel: z.union(MODELS).description('The default model to use.'),
     publicModels: z.array(z.union(MODELS))
         .default(MODELS.filter(model => model.includes('free')))
-        .description('Public models that everyone is allowed to use.')
+        .description('Public models that everyone is allowed to use.'),
+    sliceLength: z.number().default(1200).description('Length of each message slice.')
 })
 
 export type OpenRouterContextMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam
@@ -137,18 +139,22 @@ export function apply(ctx: Context, config: Config) {
         showHistory?: boolean
         model?: ModelName
     }
-    const renderContextMessages = (
-        messages: OpenRouterContextMessage[],
-        { showHistory = false, contextId, model }: RenderContextOptions = {}
-    ) => <as-forward level='always'>
-        <message>[Context] { contextId || 'Temporary context' }</message>
-        <message>[Model] { model }</message>
-        { (showHistory ? messages : messages.slice(- 2))
-            .map(message => <message>
-                { `[${capitalize(message.role)}] ${message.content}` }
-            </message>)
-        }
+const renderContextMessages = (
+    messages: OpenRouterContextMessage[],
+    { showHistory = false, contextId, model }: RenderContextOptions = {}
+) => (
+    <as-forward level='always'>
+        <as-slices header={<><message>[Context] { contextId || 'Temporary context' }</message><message>[Model] { model }</message></>} 
+            { (showHistory ? messages : messages.slice(-2))
+                .map(message => (
+                    <message>
+                        { `[${capitalize(message.role)}] ${message.content}` }
+                    </message>
+                ))
+            }
+        </as-slices>
     </as-forward>
+);
 
     ctx.model.extend('w-openrouter-context', {
         id: 'string',
@@ -205,7 +211,7 @@ export function apply(ctx: Context, config: Config) {
             })
 
             if (context) {
-                await ctx.database.set('w-openrouter-context', contextId, omit(context, [ 'id' ]))
+                await ctx.database.set('w-openrouter-context', contextId, omit(context, ['id']))
             }
 
             return renderContextMessages(messages, { showHistory, contextId, model })
